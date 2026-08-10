@@ -88,11 +88,20 @@ export default function Home() {
   }
 
   function search() {
-    const hit = cities[query.trim()];
-    const coords = query.split(/[,，\s]+/).map(Number);
-    if (hit) setCenter({ lon: hit[0], lat: hit[1] });
-    else if (coords.length >= 2 && coords.every(Number.isFinite)) setCenter({ lon: coords[0], lat: coords[1] });
-    else flash("试试“上海”或输入 121.47, 31.23");
+    const v = query.trim();
+    const hit = cities[v];
+    const c = v.split(/[/,，\s]+/).map(Number);
+    if (hit) { setCenter({ lon: hit[0], lat: hit[1] }); return; }
+    if (c.length === 3 && c.every(Number.isFinite)) {
+      const z = c[0] | 0, x = c[1] | 0, y = c[2] | 0, n = 2 ** z;
+      if (z < 2 || z > 19) return flash("缩放级别需在 2-19 之间");
+      if (x < 0 || x >= n || y < 0 || y >= n) return flash("Z" + z + " 切片范围 0-" + (n - 1));
+      const ll = worldToLonLat((x + 0.5) * TILE, (y + 0.5) * TILE, z);
+      setZoom(z); setCenter(ll); setSelected({ x, y, z, ...ll });
+      flash("已定位到切片 " + z + "/" + x + "/" + y); return;
+    }
+    if (c.length >= 2 && c.every(Number.isFinite)) { setCenter({ lon: c[0], lat: c[1] }); return; }
+    flash("试试“上海”、经纬度 121.47,31.23 或切片 12/3372/1551");
   }
 
   function flash(message: string) { setToast(message); window.setTimeout(() => setToast(""), 2200); }
@@ -104,7 +113,7 @@ export default function Home() {
         <div className="brand"><span className="brand-mark">N</span><div><strong>TileScope</strong><small>WEB MERCATOR EXPLORER</small></div></div>
         <div className="search-wrap">
           <span className="search-icon">⌕</span>
-          <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()} placeholder="搜索城市或输入经纬度…" aria-label="搜索地点" />
+          <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()} placeholder="搜索城市 / 经纬度 / 切片 Z/X/Y…" aria-label="搜索地点" />
           <kbd>↵</kbd>
         </div>
         <div className="header-actions"><button onClick={locate}>◎ <span>定位</span></button><button className="icon-button" aria-label="帮助">?</button></div>
