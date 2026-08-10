@@ -7,7 +7,7 @@
 - 拖拽、缩放和浏览 OpenStreetMap 地图
 - 显示 XYZ 切片网格与切片编号
 - 查看经纬度、QuadKey、切片边界和 EPSG:3857 信息
-- 城市或经纬度搜索、浏览器定位
+- 城市、经纬度或 XYZ 切片搜索（如 `12/3372/1551`），浏览器定位
 - 一键复制 XYZ、QuadKey 和切片 URL
 
 在线体验：<https://cpu1998.github.io/tilescope/>
