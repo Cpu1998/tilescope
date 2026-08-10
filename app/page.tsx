@@ -1,39 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-
-const TILE = 256;
-const cities: Record<string, [number, number]> = {
-  北京: [116.3974, 39.9093], 上海: [121.4737, 31.2304], 深圳: [114.0579, 22.5431],
-  杭州: [120.1551, 30.2741], 成都: [104.0665, 30.5723], 广州: [113.2644, 23.1291],
-};
-
-function lonLatToWorld(lon: number, lat: number, z: number) {
-  const scale = TILE * 2 ** z;
-  const x = ((lon + 180) / 360) * scale;
-  const s = Math.sin((lat * Math.PI) / 180);
-  const y = (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * scale;
-  return { x, y };
-}
-
-function worldToLonLat(x: number, y: number, z: number) {
-  const scale = TILE * 2 ** z;
-  const lon = (x / scale) * 360 - 180;
-  const n = Math.PI - (2 * Math.PI * y) / scale;
-  const lat = (180 / Math.PI) * Math.atan(Math.sinh(n));
-  return { lon, lat };
-}
-
-function quadKey(x: number, y: number, z: number) {
-  let q = "";
-  for (let i = z; i > 0; i--) {
-    let d = 0; const mask = 1 << (i - 1);
-    if ((x & mask) !== 0) d += 1;
-    if ((y & mask) !== 0) d += 2;
-    q += d;
-  }
-  return q;
-}
+import { TILE, lonLatToWorld, worldToLonLat, quadKey, parseQuery, MIN_Z, MAX_Z } from "@/shared/tile";
 
 export default function Home() {
   const [center, setCenter] = useState({ lon: 116.3974, lat: 39.9093 });
@@ -75,7 +43,7 @@ export default function Home() {
   }
 
   function changeZoom(next: number) {
-    const z = Math.max(2, Math.min(19, next)); setZoom(z);
+    const z = Math.max(MIN_Z, Math.min(MAX_Z, next)); setZoom(z);
     const p = lonLatToWorld(selected.lon, selected.lat, z);
     setSelected(s => ({ ...s, x: Math.floor(p.x / TILE), y: Math.floor(p.y / TILE), z }));
   }
@@ -88,20 +56,14 @@ export default function Home() {
   }
 
   function search() {
-    const v = query.trim();
-    const hit = cities[v];
-    const c = v.split(/[/,，\s]+/).map(Number);
-    if (hit) { setCenter({ lon: hit[0], lat: hit[1] }); return; }
-    if (c.length === 3 && c.every(Number.isFinite)) {
-      const z = c[0] | 0, x = c[1] | 0, y = c[2] | 0, n = 2 ** z;
-      if (z < 2 || z > 19) return flash("缩放级别需在 2-19 之间");
-      if (x < 0 || x >= n || y < 0 || y >= n) return flash("Z" + z + " 切片范围 0-" + (n - 1));
-      const ll = worldToLonLat((x + 0.5) * TILE, (y + 0.5) * TILE, z);
-      setZoom(z); setCenter(ll); setSelected({ x, y, z, ...ll });
-      flash("已定位到切片 " + z + "/" + x + "/" + y); return;
+    const r = parseQuery(query);
+    if (r.type === "center") { setCenter({ lon: r.lon, lat: r.lat }); return; }
+    if (r.type === "tile") {
+      setZoom(r.z); setCenter({ lon: r.lon, lat: r.lat });
+      setSelected({ x: r.x, y: r.y, z: r.z, lon: r.lon, lat: r.lat });
+      flash("已定位到切片 " + r.z + "/" + r.x + "/" + r.y); return;
     }
-    if (c.length >= 2 && c.every(Number.isFinite)) { setCenter({ lon: c[0], lat: c[1] }); return; }
-    flash("试试“上海”、经纬度 121.47,31.23 或切片 12/3372/1551");
+    flash(r.message);
   }
 
   function flash(message: string) { setToast(message); window.setTimeout(() => setToast(""), 2200); }
@@ -154,7 +116,7 @@ export default function Home() {
             <div><dt>切片尺寸</dt><dd>256 × 256 px</dd></div><div><dt>坐标系</dt><dd>EPSG:3857</dd></div><div><dt>切片方案</dt><dd>XYZ / Slippy Map</dd></div>
           </dl></section>
           <section className="data-section"><h2>地理边界</h2><div className="bounds"><div><span>西北 NW</span><code>{bounds.nw.lon.toFixed(5)}, {bounds.nw.lat.toFixed(5)}</code></div><div><span>东南 SE</span><code>{bounds.se.lon.toFixed(5)}, {bounds.se.lat.toFixed(5)}</code></div></div></section>
-          <div className="zoom-scale"><div><span>缩放级别</span><b>Z {zoom}</b></div><input type="range" min="2" max="19" value={zoom} onChange={e=>changeZoom(Number(e.target.value))}/><div className="scale-label"><span>世界</span><span>街道</span><span>建筑</span></div></div>
+          <div className="zoom-scale"><div><span>缩放级别</span><b>Z {zoom}</b></div><input type="range" min={MIN_Z} max={MAX_Z} value={zoom} onChange={e=>changeZoom(Number(e.target.value))}/><div className="scale-label"><span>世界</span><span>街道</span><span>建筑</span></div></div>
           <button className="url-button" onClick={()=>copy(`https://tile.openstreetmap.org/${selected.z}/${selected.x}/${selected.y}.png`)}>复制切片 URL <span>→</span></button>
         </aside>
       </section>

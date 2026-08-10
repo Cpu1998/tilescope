@@ -1093,3 +1093,9 @@ next-env.d.ts
 .source-git/objects/fa/868030a4d22c51a3d266c58b043b2876b38a98
 .source-git/objects/fa/ea5ee7e3f945e508598f9fc1ca142c32a96c5c
 .source-git/refs/heads/main
+
+# 由 scripts/build-static.mjs 从 shared/tile.js 生成，请勿提交
+github-pages/tile.js
+
+# TypeScript 增量编译缓存
+tsconfig.tsbuildinfo

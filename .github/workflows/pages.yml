@@ -24,6 +24,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Generate shared tile module
+        run: node scripts/build-static.mjs
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
