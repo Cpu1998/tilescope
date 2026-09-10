@@ -90,7 +90,21 @@ export function quadKey(x, y, z) {
  * @returns {LonLat}
  */
 export function tileCenter(x, y, z) {
-  return worldToLonLat((x + 0.5) * TILE, (y + 0.5) * TILE, z);
+  const n = 2 ** z;
+  const wx = ((x % n) + n) % n; // 跨经度 180° 平移后 x 可能越界，取模回到 [0, n)
+  return worldToLonLat((wx + 0.5) * TILE, (y + 0.5) * TILE, z);
+}
+
+/**
+ * 切片中心坐标文本（"lon, lat"，六位小数），供一键复制到剪贴板。
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @returns {string}
+ */
+export function tileCenterText(x, y, z) {
+  const c = tileCenter(x, y, z);
+  return `${c.lon.toFixed(6)}, ${c.lat.toFixed(6)}`;
 }
 
 /**

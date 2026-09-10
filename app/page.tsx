@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { TILE, lonLatToWorld, worldToLonLat, quadKey, parseQuery, MIN_Z, MAX_Z } from "@/shared/tile";
+import { TILE, lonLatToWorld, worldToLonLat, quadKey, parseQuery, tileCenter, tileCenterText, MIN_Z, MAX_Z } from "@/shared/tile";
 
 export default function Home() {
   const [center, setCenter] = useState({ lon: 116.3974, lat: 39.9093 });
@@ -32,6 +32,8 @@ export default function Home() {
     const se = worldToLonLat((selected.x + 1) * TILE, (selected.y + 1) * TILE, selected.z);
     return { nw, se };
   }, [selected]);
+
+  const tileCenterLL = useMemo(() => tileCenter(selected.x, selected.y, selected.z), [selected]);
 
   function chooseAt(clientX: number, clientY: number) {
     const r = viewport.current?.getBoundingClientRect(); if (!r) return;
@@ -110,7 +112,8 @@ export default function Home() {
             <div className="xyz-values"><div><span>Z</span><strong>{selected.z}</strong></div><em>/</em><div><span>X</span><strong>{selected.x}</strong></div><em>/</em><div><span>Y</span><strong>{selected.y}</strong></div></div>
           </div>
 
-          <section className="data-section"><h2>中心位置</h2><div className="coordinate-row"><div><span>经度 LONGITUDE</span><b>{selected.lon.toFixed(6)}°</b></div><div><span>纬度 LATITUDE</span><b>{selected.lat.toFixed(6)}°</b></div></div></section>
+          <section className="data-section"><h2>选中位置（点击点）</h2><div className="coordinate-row"><div><span>经度 LONGITUDE</span><b>{selected.lon.toFixed(6)}°</b></div><div><span>纬度 LATITUDE</span><b>{selected.lat.toFixed(6)}°</b></div></div></section>
+          <section className="data-section"><h2>切片中心 <button className="section-copy" onClick={()=>copy(tileCenterText(selected.x,selected.y,selected.z))}>复制坐标</button></h2><div className="coordinate-row"><div><span>经度 LONGITUDE</span><b>{tileCenterLL.lon.toFixed(6)}°</b></div><div><span>纬度 LATITUDE</span><b>{tileCenterLL.lat.toFixed(6)}°</b></div></div></section>
           <section className="data-section"><h2>切片属性</h2><dl>
             <div><dt>QuadKey</dt><dd>{quadKey(selected.x,selected.y,selected.z)} <button onClick={()=>copy(quadKey(selected.x,selected.y,selected.z))}>⧉</button></dd></div>
             <div><dt>切片尺寸</dt><dd>256 × 256 px</dd></div><div><dt>坐标系</dt><dd>EPSG:3857</dd></div><div><dt>切片方案</dt><dd>XYZ / Slippy Map</dd></div>
