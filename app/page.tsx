@@ -54,8 +54,20 @@ export default function Home() {
     setSelected({ x: Math.floor(wx / TILE), y: Math.floor(wy / TILE), z: zoom, ...ll });
   }
 
-  function changeZoom(next: number) {
-    const z = Math.max(MIN_Z, Math.min(MAX_Z, next)); setZoom(z);
+  function changeZoom(next: number, anchorClient?: { x: number; y: number }) {
+    const z = Math.max(MIN_Z, Math.min(MAX_Z, next));
+    if (anchorClient) {
+      // 以鼠标为锚点缩放：保持光标下的地理点在屏幕上不动
+      const r = viewport.current?.getBoundingClientRect();
+      if (r) {
+        const px = anchorClient.x - r.left + (map.w - r.width) / 2;
+        const py = anchorClient.y - r.top + (map.h - r.height) / 2;
+        const ll = worldToLonLat(map.minX + px, map.minY + py, zoom);
+        const w2 = lonLatToWorld(ll.lon, ll.lat, z);
+        setCenter(worldToLonLat(w2.x - px + map.w / 2, w2.y - py + map.h / 2, z));
+      }
+    }
+    setZoom(z);
     const p = lonLatToWorld(selected.lon, selected.lat, z);
     setSelected(s => ({ ...s, x: Math.floor(p.x / TILE), y: Math.floor(p.y / TILE), z }));
   }
@@ -95,8 +107,8 @@ export default function Home() {
 
       <section className="workspace">
         <div className="map-panel" ref={viewport}
-          onWheel={e=>{e.preventDefault(); changeZoom(zoom + (e.deltaY < 0 ? 1 : -1));}}
-          onPointerDown={e=>{const w=lonLatToWorld(center.lon,center.lat,zoom); drag.current={x:e.clientX,y:e.clientY,wx:w.x,wy:w.y}; e.currentTarget.setPointerCapture(e.pointerId)}}
+          onWheel={e=>{e.preventDefault(); changeZoom(zoom + (e.deltaY < 0 ? 1 : -1), { x: e.clientX, y: e.clientY });}}
+          onPointerDown={e=>{if((e.target as HTMLElement).closest("button,input,a"))return; const w=lonLatToWorld(center.lon,center.lat,zoom); drag.current={x:e.clientX,y:e.clientY,wx:w.x,wy:w.y}; e.currentTarget.setPointerCapture(e.pointerId)}}
           onPointerMove={e=>{if(!drag.current)return; const w=drag.current.wx-(e.clientX-drag.current.x), y=drag.current.wy-(e.clientY-drag.current.y); setCenter(worldToLonLat(w,y,zoom));}}
           onPointerUp={e=>{if(drag.current && Math.hypot(e.clientX-drag.current.x,e.clientY-drag.current.y)<5) chooseAt(e.clientX,e.clientY); drag.current=null;}}
         >
