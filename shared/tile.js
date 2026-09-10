@@ -108,6 +108,33 @@ export function tileCenterText(x, y, z) {
 }
 
 /**
+ * 底图种类键：standard = OSM 矢量，imagery = Esri 世界影像。
+ * @typedef {"standard" | "imagery"} BasemapKey
+ */
+
+/**
+ * 底图切片 URL。注意两家服务的路径顺序不同：
+ * OSM 是 /z/x/y.png，ArcGIS World Imagery 是 /z/y/x（无扩展名）。
+ * @param {BasemapKey} basemap
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @returns {string}
+ */
+export function tileUrl(basemap, x, y, z) {
+  if (basemap === "imagery") {
+    return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+  }
+  return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+}
+
+/** 各底图的署名（对比模式仍基于 OSM 切片，用 standard 署名）。 */
+export const ATTRIBUTIONS = {
+  standard: "© OpenStreetMap contributors",
+  imagery: "Esri, Maxar, Earthstar Geographics",
+};
+
+/**
  * 解析搜索输入：城市名 / 经纬度 / XYZ 切片坐标。
  *
  * - 命中城市名或两个数字（经纬度）→ `{ type: "center" }`，仅平移地图中心。

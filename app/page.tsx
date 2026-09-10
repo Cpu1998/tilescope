@@ -1,14 +1,21 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { TILE, lonLatToWorld, worldToLonLat, quadKey, parseQuery, tileCenter, tileCenterText, MIN_Z, MAX_Z } from "@/shared/tile";
+import { TILE, lonLatToWorld, worldToLonLat, quadKey, parseQuery, tileCenter, tileCenterText, tileUrl, ATTRIBUTIONS, MIN_Z, MAX_Z } from "@/shared/tile";
+
+const LAYERS = [
+  { key: "standard", label: "标准" },
+  { key: "imagery", label: "影像" },
+  { key: "contrast", label: "对比" },
+] as const;
+type LayerKey = (typeof LAYERS)[number]["key"];
 
 export default function Home() {
   const [center, setCenter] = useState({ lon: 116.3974, lat: 39.9093 });
   const [zoom, setZoom] = useState(12);
   const [selected, setSelected] = useState({ x: 3372, y: 1551, z: 12, lon: 116.3974, lat: 39.9093 });
   const [query, setQuery] = useState("");
-  const [contrast, setContrast] = useState(false);
+  const [layer, setLayer] = useState<LayerKey>("standard");
   const [toast, setToast] = useState("");
   const viewport = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; wx: number; wy: number } | null>(null);
@@ -34,6 +41,9 @@ export default function Home() {
   }, [selected]);
 
   const tileCenterLL = useMemo(() => tileCenter(selected.x, selected.y, selected.z), [selected]);
+
+  // 对比模式是叠加在 OSM 切片上的 CSS 滤镜，实际底图仍是 standard。
+  const base = layer === "contrast" ? "standard" : layer;
 
   function chooseAt(clientX: number, clientY: number) {
     const r = viewport.current?.getBoundingClientRect(); if (!r) return;
@@ -90,17 +100,17 @@ export default function Home() {
           onPointerMove={e=>{if(!drag.current)return; const w=drag.current.wx-(e.clientX-drag.current.x), y=drag.current.wy-(e.clientY-drag.current.y); setCenter(worldToLonLat(w,y,zoom));}}
           onPointerUp={e=>{if(drag.current && Math.hypot(e.clientX-drag.current.x,e.clientY-drag.current.y)<5) chooseAt(e.clientX,e.clientY); drag.current=null;}}
         >
-          <div className={`tile-stage ${contrast ? "contrast" : ""}`} style={{width:map.w,height:map.h,left:"50%",top:"50%",transform:"translate(-50%,-50%)"}}>
+          <div className={`tile-stage ${layer === "contrast" ? "contrast" : ""} ${layer === "imagery" ? "imagery" : ""}`} style={{width:map.w,height:map.h,left:"50%",top:"50%",transform:"translate(-50%,-50%)"}}>
             {map.tiles.map(t=><div className={`tile-cell ${selected.x===t.x&&selected.y===t.y&&selected.z===zoom?"selected":""}`} key={`${t.x}-${t.y}`} style={{left:t.left,top:t.top}}>
-              <img src={`https://tile.openstreetmap.org/${zoom}/${t.x}/${t.y}.png`} alt="" draggable={false}/>
+              <img src={tileUrl(base, t.x, t.y, zoom)} alt="" draggable={false}/>
               <div className="tile-grid"><span><b>{zoom}</b><i>/</i>{t.x}<i>/</i>{t.y}</span></div>
             </div>)}
           </div>
           <div className="map-vignette" />
           <div className="map-controls"><button onClick={()=>changeZoom(zoom+1)} aria-label="放大">+</button><button onClick={()=>changeZoom(zoom-1)} aria-label="缩小">−</button><button onClick={()=>setCenter({lon:116.3974,lat:39.9093})} aria-label="重置方向">◆</button></div>
-          <div className="layer-switch"><button className={!contrast?"active":""} onClick={()=>setContrast(false)}>标准</button><button className={contrast?"active":""} onClick={()=>setContrast(true)}>对比</button></div>
+          <div className="layer-switch">{LAYERS.map(l=><button key={l.key} className={layer===l.key?"active":""} onClick={()=>setLayer(l.key)}>{l.label}</button>)}</div>
           <div className="map-status"><span className="pulse"/> 网格已开启 <i/> Z {zoom} <i/> {center.lon.toFixed(4)}°, {center.lat.toFixed(4)}°</div>
-          <div className="attribution">© OpenStreetMap contributors</div>
+          <div className="attribution">{ATTRIBUTIONS[base]}</div>
         </div>
 
         <aside className="inspector">
@@ -120,7 +130,7 @@ export default function Home() {
           </dl></section>
           <section className="data-section"><h2>地理边界</h2><div className="bounds"><div><span>西北 NW</span><code>{bounds.nw.lon.toFixed(5)}, {bounds.nw.lat.toFixed(5)}</code></div><div><span>东南 SE</span><code>{bounds.se.lon.toFixed(5)}, {bounds.se.lat.toFixed(5)}</code></div></div></section>
           <div className="zoom-scale"><div><span>缩放级别</span><b>Z {zoom}</b></div><input type="range" min={MIN_Z} max={MAX_Z} value={zoom} onChange={e=>changeZoom(Number(e.target.value))}/><div className="scale-label"><span>世界</span><span>街道</span><span>建筑</span></div></div>
-          <button className="url-button" onClick={()=>copy(`https://tile.openstreetmap.org/${selected.z}/${selected.x}/${selected.y}.png`)}>复制切片 URL <span>→</span></button>
+          <button className="url-button" onClick={()=>copy(tileUrl(base, selected.x, selected.y, selected.z))}>复制切片 URL <span>→</span></button>
         </aside>
       </section>
       {toast && <div className="toast">{toast}</div>}
