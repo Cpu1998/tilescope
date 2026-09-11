@@ -13,6 +13,7 @@
  * @typedef {(
  *   | { type: "center", lon: number, lat: number }
  *   | { type: "tile", x: number, y: number, z: number, lon: number, lat: number }
+ *   | { type: "terrain", x: number, y: number, z: number, lon: number, lat: number }
  *   | { type: "error", message: string }
  * )} QueryResult
  */
@@ -108,6 +109,99 @@ export function tileCenterText(x, y, z) {
 }
 
 /**
+ * ========== 地形切片（Quantized-Mesh）规则 ==========
+ *
+ * 与上方 Web Mercator XYZ 规则不同，Cesium 地形切片（ctb-tile 产物，
+ * layer.json 声明 scheme "tms"）使用 WGS84 地理四叉树网格：
+ *
+ * - 第 z 层共 2^(z+1) 列 × 2^z 行（第 0 层全球 2×1，从经度对半切两次起步）
+ * - x 自西向东（同 XYZ），y 自南向北（TMS，与 XYZ 相反）
+ * - 每片跨度 360/2^(z+1)° × 180/2^z°（度数正方形，非墨卡托）
+ * - 路径 {z}/{x}/{y}.terrain，内容为量化网格二进制（非图片）
+ */
+
+/** 地形切片第 z 层的列数（2^(z+1)）。 */
+export function terrainCols(z) {
+  return 2 ** (z + 1);
+}
+
+/** 地形切片第 z 层的行数（2^z）。 */
+export function terrainRows(z) {
+  return 2 ** z;
+}
+
+/**
+ * 经纬度 → 地形切片编号。y 自南向北计数（TMS）。
+ * @param {number} lon
+ * @param {number} lat
+ * @param {number} z
+ * @returns {{ x: number, y: number }}
+ */
+export function lonLatToTerrainTile(lon, lat, z) {
+  return {
+    x: Math.min(terrainCols(z) - 1, Math.max(0, Math.floor(((lon + 180) / 360) * terrainCols(z)))),
+    y: Math.min(terrainRows(z) - 1, Math.max(0, Math.floor(((lat + 90) / 180) * terrainRows(z)))),
+  };
+}
+
+/**
+ * 地形切片的地理边界（度，WGS84）。
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @returns {{ west: number, south: number, east: number, north: number }}
+ */
+export function terrainTileBounds(x, y, z) {
+  const lonSpan = 360 / terrainCols(z);
+  const latSpan = 180 / terrainRows(z);
+  return {
+    west: -180 + x * lonSpan,
+    east: -180 + (x + 1) * lonSpan,
+    south: -90 + y * latSpan,
+    north: -90 + (y + 1) * latSpan,
+  };
+}
+
+/**
+ * 地形切片相对路径（ctb-tile 产物命名，服务前缀由具体部署决定）。
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @returns {string}
+ */
+export function terrainTilePath(x, y, z) {
+  return `${z}/${x}/${y}.terrain`;
+}
+
+/**
+ * 地形切片编号 → 定位结果（含切片中心经纬度）。
+ * @param {number} z
+ * @param {number} x
+ * @param {number} y
+ * @returns {QueryResult}
+ */
+function terrainQuery(z, x, y) {
+  if (z < MIN_Z || z > MAX_Z) {
+    return { type: "error", message: `缩放级别需在 ${MIN_Z}-${MAX_Z} 之间` };
+  }
+  if (x < 0 || x >= terrainCols(z) || y < 0 || y >= terrainRows(z)) {
+    return {
+      type: "error",
+      message: `Z${z} 地形切片范围 x 0-${terrainCols(z) - 1} / y 0-${terrainRows(z) - 1}`,
+    };
+  }
+  const b = terrainTileBounds(x, y, z);
+  return {
+    type: "terrain",
+    x,
+    y,
+    z,
+    lon: (b.west + b.east) / 2,
+    lat: (b.north + b.south) / 2,
+  };
+}
+
+/**
  * 底图种类键：standard = OSM 矢量，imagery = Esri 世界影像，terrain = Esri 世界地形图。
  * @typedef {"standard" | "imagery" | "terrain"} BasemapKey
  */
@@ -140,11 +234,13 @@ export const ATTRIBUTIONS = {
 };
 
 /**
- * 解析搜索输入：城市名 / 经纬度 / XYZ 切片坐标。
+ * 解析搜索输入：城市名 / 经纬度 / XYZ 切片坐标 / 地形切片坐标。
  *
  * - 命中城市名或两个数字（经纬度）→ `{ type: "center" }`，仅平移地图中心。
- * - 三个数字（Z/X/Y）且在合法范围内 → `{ type: "tile" }`，定位到该切片
- *   （中心点经纬度 + 选中切片 + 缩放级别）。
+ * - 三个数字（Z/X/Y）且在 XYZ 合法范围内 → `{ type: "tile" }`。
+ * - 以 `.terrain` 结尾（支持裸编号或完整 URL 取末段），
+ *   或 x 超出 XYZ 范围但落在地形网格内 → `{ type: "terrain" }`，
+ *   按 WGS84 地理四叉树（TMS，y 自南向北）解析。
  * - 其它情况 → `{ type: "error", message }`，由调用方提示用户。
  *
  * @param {string} input
@@ -155,6 +251,10 @@ export function parseQuery(input) {
   const hit = cities[v];
   if (hit) return { type: "center", lon: hit[0], lat: hit[1] };
 
+  // 地形切片：显式 .terrain 后缀，支持裸编号或完整 URL（取末段 z/x/y）
+  const t = v.match(/(\d+)[^\d]+(\d+)[^\d]+(\d+)\s*\.terrain\s*$/i);
+  if (t) return terrainQuery(t[1] | 0, t[2] | 0, t[3] | 0);
+
   const c = v.split(/[/,，\s]+/).map(Number);
 
   if (c.length === 3 && c.every(Number.isFinite)) {
@@ -164,6 +264,10 @@ export function parseQuery(input) {
     const n = 2 ** z;
     if (z < MIN_Z || z > MAX_Z) {
       return { type: "error", message: `缩放级别需在 ${MIN_Z}-${MAX_Z} 之间` };
+    }
+    // x 超出 XYZ 范围但落在地形网格内 → 按地形切片（地理四叉树 TMS）解析
+    if (x >= n && x < n * 2 && y >= 0 && y < n) {
+      return terrainQuery(z, x, y);
     }
     if (x < 0 || x >= n || y < 0 || y >= n) {
       return { type: "error", message: `Z${z} 切片范围 0-${n - 1}` };
@@ -177,6 +281,6 @@ export function parseQuery(input) {
 
   return {
     type: "error",
-    message: "试试“上海”、经纬度 121.47,31.23 或切片 12/3372/1551",
+    message: "试试“上海”、经纬度 121.47,31.23、切片 12/3372/1551 或地形 15/53255/21893.terrain",
   };
 }

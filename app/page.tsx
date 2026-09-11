@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { TILE, lonLatToWorld, worldToLonLat, quadKey, parseQuery, tileCenter, tileCenterText, tileUrl, ATTRIBUTIONS, MIN_Z, MAX_Z } from "@/shared/tile";
+import { TILE, lonLatToWorld, worldToLonLat, quadKey, parseQuery, tileCenter, tileCenterText, tileUrl, ATTRIBUTIONS, MIN_Z, MAX_Z, lonLatToTerrainTile, terrainTileBounds, terrainTilePath } from "@/shared/tile";
 
 const LAYERS = [
   { key: "standard", label: "标准" },
@@ -42,6 +42,12 @@ export default function Home() {
   }, [selected]);
 
   const tileCenterLL = useMemo(() => tileCenter(selected.x, selected.y, selected.z), [selected]);
+
+  // 选中位置对应的 Quantized-Mesh 地形切片（WGS84 地理四叉树，TMS y 自南向北）
+  const terrain = useMemo(() => {
+    const t = lonLatToTerrainTile(selected.lon, selected.lat, selected.z);
+    return { tile: t, bounds: terrainTileBounds(t.x, t.y, selected.z) };
+  }, [selected]);
 
   // 对比模式是叠加在 OSM 切片上的 CSS 滤镜，实际底图仍是 standard。
   const base = layer === "contrast" ? "standard" : layer;
@@ -88,6 +94,12 @@ export default function Home() {
       setSelected({ x: r.x, y: r.y, z: r.z, lon: r.lon, lat: r.lat });
       flash("已定位到切片 " + r.z + "/" + r.x + "/" + r.y); return;
     }
+    if (r.type === "terrain") {
+      setZoom(r.z); setCenter({ lon: r.lon, lat: r.lat });
+      const w = lonLatToWorld(r.lon, r.lat, r.z);
+      setSelected({ x: Math.floor(w.x / TILE), y: Math.floor(w.y / TILE), z: r.z, lon: r.lon, lat: r.lat });
+      flash("已定位到地形切片 " + terrainTilePath(r.x, r.y, r.z) + "（TMS 地理网格）"); return;
+    }
     flash(r.message);
   }
 
@@ -100,7 +112,7 @@ export default function Home() {
         <div className="brand"><span className="brand-mark">N</span><div><strong>TileScope</strong><small>WEB MERCATOR EXPLORER</small></div></div>
         <div className="search-wrap">
           <span className="search-icon">⌕</span>
-          <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()} placeholder="搜索城市 / 经纬度 / 切片 Z/X/Y…" aria-label="搜索地点" />
+          <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&search()} placeholder="搜索城市 / 经纬度 / 切片 Z/X/Y / 地形 .terrain…" aria-label="搜索地点" />
           <kbd>↵</kbd>
         </div>
         <div className="header-actions"><button onClick={locate}>◎ <span>定位</span></button><button className="icon-button" aria-label="帮助">?</button></div>
@@ -142,6 +154,12 @@ export default function Home() {
             <div><dt>切片尺寸</dt><dd>256 × 256 px</dd></div><div><dt>坐标系</dt><dd>EPSG:3857</dd></div><div><dt>切片方案</dt><dd>XYZ / Slippy Map</dd></div>
           </dl></section>
           <section className="data-section"><h2>地理边界</h2><div className="bounds"><div><span>西北 NW</span><code>{bounds.nw.lon.toFixed(5)}, {bounds.nw.lat.toFixed(5)}</code></div><div><span>东南 SE</span><code>{bounds.se.lon.toFixed(5)}, {bounds.se.lat.toFixed(5)}</code></div></div></section>
+          <section className="data-section"><h2>地形切片 · Quantized-Mesh <button className="section-copy" onClick={()=>copy(terrainTilePath(terrain.tile.x, terrain.tile.y, selected.z))}>复制路径</button></h2><dl>
+            <div><dt>Z / X / Y</dt><dd>{selected.z} / {terrain.tile.x} / {terrain.tile.y}</dd></div>
+            <div><dt>网格</dt><dd>EPSG:4326 四叉树 · 2^{selected.z + 1}×2^{selected.z}</dd></div>
+            <div><dt>Y 方向</dt><dd>自南向北（TMS）</dd></div>
+            <div><dt>路径</dt><dd>{terrainTilePath(terrain.tile.x, terrain.tile.y, selected.z)}</dd></div>
+          </dl><div className="bounds"><div><span>西南 SW</span><code>{terrain.bounds.south.toFixed(5)}, {terrain.bounds.west.toFixed(5)}</code></div><div><span>东北 NE</span><code>{terrain.bounds.north.toFixed(5)}, {terrain.bounds.east.toFixed(5)}</code></div></div></section>
           <div className="zoom-scale"><div><span>缩放级别</span><b>Z {zoom}</b></div><input type="range" min={MIN_Z} max={MAX_Z} value={zoom} onChange={e=>changeZoom(Number(e.target.value))}/><div className="scale-label"><span>世界</span><span>街道</span><span>建筑</span></div></div>
           <button className="url-button" onClick={()=>copy(tileUrl(base, selected.x, selected.y, selected.z))}>复制切片 URL <span>→</span></button>
         </aside>

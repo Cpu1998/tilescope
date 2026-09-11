@@ -10,7 +10,7 @@
 <main class="app-shell">
   <header class="topbar">
     <div class="brand"><span class="brand-mark">N</span><div><strong>TileScope</strong><small>WEB MERCATOR EXPLORER</small></div></div>
-    <form class="search-wrap" id="search-form"><span class="search-icon">⌕</span><input id="search" placeholder="搜索城市 / 经纬度 / 切片 Z/X/Y…" aria-label="搜索地点"><kbd>↵</kbd></form>
+    <form class="search-wrap" id="search-form"><span class="search-icon">⌕</span><input id="search" placeholder="搜索城市 / 经纬度 / 切片 Z/X/Y / 地形 .terrain…" aria-label="搜索地点"><kbd>↵</kbd></form>
     <div class="header-actions"><button id="locate">◎ <span>定位</span></button><a href="https://github.com/Cpu1998/tilescope" aria-label="GitHub 仓库">GitHub</a></div>
   </header>
   <section class="workspace">
@@ -28,6 +28,7 @@
       <section class="data-section"><h2>切片中心 <button class="section-copy" id="copy-tile-center">复制坐标</button></h2><div class="coordinate-row"><div><span>经度 LONGITUDE</span><b id="tc-lon"></b></div><div><span>纬度 LATITUDE</span><b id="tc-lat"></b></div></div></section>
       <section class="data-section"><h2>切片属性</h2><dl><div><dt>QuadKey</dt><dd><span id="quad-val"></span> <button id="copy-quad">⧉</button></dd></div><div><dt>切片尺寸</dt><dd>256 × 256 px</dd></div><div><dt>坐标系</dt><dd>EPSG:3857</dd></div><div><dt>切片方案</dt><dd>XYZ / Slippy Map</dd></div></dl></section>
       <section class="data-section"><h2>地理边界</h2><div class="bounds"><div><span>西北 NW</span><code id="nw-val"></code></div><div><span>东南 SE</span><code id="se-val"></code></div></div></section>
+      <section class="data-section"><h2>地形切片 · Quantized-Mesh <button class="section-copy" id="copy-terrain">复制路径</button></h2><dl><div><dt>Z / X / Y</dt><dd id="t-xyz"></dd></div><div><dt>网格</dt><dd id="t-grid"></dd></div><div><dt>Y 方向</dt><dd>自南向北（TMS）</dd></div><div><dt>路径</dt><dd id="t-path"></dd></div></dl><div class="bounds"><div><span>西南 SW</span><code id="t-sw"></code></div><div><span>东北 NE</span><code id="t-ne"></code></div></div></section>
       <div class="zoom-scale"><div><span>缩放级别</span><b id="zoom-label"></b></div><input id="zoom-range" type="range" min="2" max="19"><div class="scale-label"><span>世界</span><span>街道</span><span>建筑</span></div></div>
       <button class="url-button" id="copy-url">复制切片 URL <span>→</span></button>
     </aside>
