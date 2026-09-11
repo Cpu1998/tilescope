@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { TILE, lonLatToWorld, worldToLonLat, quadKey, parseQuery, tileCenter, tileCenterText, tileUrl, ATTRIBUTIONS, MIN_Z, MAX_Z, lonLatToTerrainTile, terrainTileBounds, terrainTilePath } from "@/shared/tile";
+import { TILE, lonLatToWorld, worldToLonLat, quadKey, parseQuery, tileCenter, tileCenterText, tileUrl, ATTRIBUTIONS, MIN_Z, MAX_Z, lonLatToTerrainTile, terrainTileBounds, terrainTilePath, visibleTerrainTiles } from "@/shared/tile";
 
 const LAYERS = [
   { key: "standard", label: "标准" },
@@ -17,6 +17,7 @@ export default function Home() {
   const [selected, setSelected] = useState({ x: 3372, y: 1551, z: 12, lon: 116.3974, lat: 39.9093 });
   const [query, setQuery] = useState("");
   const [layer, setLayer] = useState<LayerKey>("standard");
+  const [gridMode, setGridMode] = useState<"xyz" | "terrain">("xyz");
   const [toast, setToast] = useState("");
   const viewport = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; wx: number; wy: number } | null>(null);
@@ -48,6 +49,12 @@ export default function Home() {
     const t = lonLatToTerrainTile(selected.lon, selected.lat, selected.z);
     return { tile: t, bounds: terrainTileBounds(t.x, t.y, selected.z) };
   }, [selected]);
+
+  // 地形网格模式：枚举视口内的地形切片（宽恒 128px，高随纬度压扁）
+  const terrainCells = useMemo(
+    () => (gridMode === "terrain" ? visibleTerrainTiles(map.minX, map.minY, map.w, map.h, zoom) : []),
+    [map, zoom, gridMode],
+  );
 
   // 对比模式是叠加在 OSM 切片上的 CSS 滤镜，实际底图仍是 standard。
   const base = layer === "contrast" ? "standard" : layer;
@@ -125,15 +132,19 @@ export default function Home() {
           onPointerMove={e=>{if(!drag.current)return; const w=drag.current.wx-(e.clientX-drag.current.x), y=drag.current.wy-(e.clientY-drag.current.y); setCenter(worldToLonLat(w,y,zoom));}}
           onPointerUp={e=>{if(drag.current && Math.hypot(e.clientX-drag.current.x,e.clientY-drag.current.y)<5) chooseAt(e.clientX,e.clientY); drag.current=null;}}
         >
-          <div className={`tile-stage ${layer === "contrast" ? "contrast" : ""} ${layer === "imagery" || layer === "terrain" ? layer : ""}`} style={{width:map.w,height:map.h,left:"50%",top:"50%",transform:"translate(-50%,-50%)"}}>
+          <div className={`tile-stage ${layer === "contrast" ? "contrast" : ""} ${layer === "imagery" || layer === "terrain" ? layer : ""} ${gridMode === "terrain" ? "scheme-terrain" : ""}`} style={{width:map.w,height:map.h,left:"50%",top:"50%",transform:"translate(-50%,-50%)"}}>
             {map.tiles.map(t=><div className={`tile-cell ${selected.x===t.x&&selected.y===t.y&&selected.z===zoom?"selected":""}`} key={`${t.x}-${t.y}`} style={{left:t.left,top:t.top}}>
               <img src={tileUrl(base, t.x, t.y, zoom)} alt="" draggable={false}/>
               <div className="tile-grid"><span><b>{zoom}</b><i>/</i>{t.x}<i>/</i>{t.y}</span></div>
+            </div>)}
+            {terrainCells.map(t=><div key={`t-${t.x}-${t.y}`} className={`tgrid-cell ${terrain.tile.x===t.x&&terrain.tile.y===t.y&&selected.z===zoom?"selected":""}`} style={{left:t.left,top:t.top,width:t.width,height:t.height}}>
+              <span><b>{zoom}</b><i>/</i>{t.x}<i>/</i>{t.y}</span>
             </div>)}
           </div>
           <div className="map-vignette" />
           <div className="map-controls"><button onClick={()=>changeZoom(zoom+1)} aria-label="放大">+</button><button onClick={()=>changeZoom(zoom-1)} aria-label="缩小">−</button><button onClick={()=>setCenter({lon:116.3974,lat:39.9093})} aria-label="重置方向">◆</button></div>
           <div className="layer-switch">{LAYERS.map(l=><button key={l.key} className={layer===l.key?"active":""} onClick={()=>setLayer(l.key)}>{l.label}</button>)}</div>
+          <div className="grid-switch">{(["xyz", "terrain"] as const).map(k=><button key={k} className={gridMode===k?"active":""} onClick={()=>{setGridMode(k); flash(k==="terrain"?"地形网格：Quantized-Mesh 地理四叉树（TMS，y 自南向北）":"XYZ 网格：Web 墨卡托");}}>{k==="xyz"?"XYZ 切片":"地形切片"}</button>)}</div>
           <div className="map-status"><span className="pulse"/> 网格已开启 <i/> Z {zoom} <i/> {center.lon.toFixed(4)}°, {center.lat.toFixed(4)}°</div>
           <div className="attribution">{ATTRIBUTIONS[base]}</div>
         </div>

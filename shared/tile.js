@@ -173,6 +173,71 @@ export function terrainTilePath(x, y, z) {
   return `${z}/${x}/${y}.terrain`;
 }
 
+/** Web 墨卡托可表达的纬度上限（约 ±85.0511°），用于把地形网格投到像素平面。 */
+const MERCATOR_MAX_LAT = 85.0511287798066;
+
+/**
+ * 单个地形切片在 Web 墨卡托世界像素平面上的矩形。
+ * 列数是 XYZ 的两倍，因此宽度恒为 128px；纬度超出墨卡托范围的
+ * 极地片按 ±85.0511° 裁剪。
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @returns {{ left: number, top: number, width: number, height: number }}
+ */
+export function terrainTileRectPx(x, y, z) {
+  const s = TILE * 2 ** z;
+  const b = terrainTileBounds(x, y, z);
+  const north = Math.min(b.north, MERCATOR_MAX_LAT);
+  const south = Math.max(b.south, -MERCATOR_MAX_LAT);
+  const top = lonLatToWorld(0, north, z).y;
+  const bottom = lonLatToWorld(0, south, z).y;
+  return {
+    left: (x / terrainCols(z)) * s,
+    top,
+    width: s / terrainCols(z),
+    height: bottom - top,
+  };
+}
+
+/**
+ * 枚举视口（世界像素区间）内可见的地形切片，返回相对视口左上角的像素矩形。
+ * 地图仍按 Web 墨卡托渲染，因此高纬度片会被压扁；跨经度 180° 时
+ * 编号回绕到 [0, 2^(z+1))，位置连续延伸。
+ * @param {number} minX 视口左上角的世界像素 x
+ * @param {number} minY 视口左上角的世界像素 y
+ * @param {number} w 视口宽（px）
+ * @param {number} h 视口高（px）
+ * @param {number} z
+ * @returns {{ x: number, y: number, left: number, top: number, width: number, height: number }[]}
+ */
+export function visibleTerrainTiles(minX, minY, w, h, z) {
+  const s = TILE * 2 ** z;
+  const cols = terrainCols(z);
+  const rows = terrainRows(z);
+  const lonSpan = 360 / cols;
+  const latSpan = 180 / rows;
+  const cw = s / cols;
+  const lonWest = (minX / s) * 360 - 180;
+  const lonEast = ((minX + w) / s) * 360 - 180;
+  const clampLat = (v) => Math.min(MERCATOR_MAX_LAT, Math.max(-MERCATOR_MAX_LAT, v));
+  const latTop = clampLat(worldToLonLat(0, minY, z).lat);
+  const latBottom = clampLat(worldToLonLat(0, minY + h, z).lat);
+  const x0 = Math.floor((lonWest + 180) / lonSpan);
+  const x1 = Math.floor((lonEast + 180) / lonSpan);
+  const y0 = Math.max(0, Math.floor((latBottom + 90) / latSpan));
+  const y1 = Math.min(rows - 1, Math.floor((latTop + 90) / latSpan));
+  const cells = [];
+  for (let ry = y0; ry <= y1; ry++) {
+    for (let rx = x0; rx <= x1; rx++) {
+      const tx = ((rx % cols) + cols) % cols;
+      const r = terrainTileRectPx(tx, ry, z);
+      cells.push({ x: tx, y: ry, left: rx * cw - minX, top: r.top - minY, width: r.width, height: r.height });
+    }
+  }
+  return cells;
+}
+
 /**
  * 地形切片编号 → 定位结果（含切片中心经纬度）。
  * @param {number} z
