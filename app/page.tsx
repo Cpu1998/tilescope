@@ -6,6 +6,7 @@ import { TILE, lonLatToWorld, worldToLonLat, quadKey, parseQuery, tileCenter, ti
 const LAYERS = [
   { key: "standard", label: "标准" },
   { key: "imagery", label: "影像" },
+  { key: "terrain", label: "地形" },
   { key: "contrast", label: "对比" },
 ] as const;
 type LayerKey = (typeof LAYERS)[number]["key"];
@@ -112,7 +113,7 @@ export default function Home() {
           onPointerMove={e=>{if(!drag.current)return; const w=drag.current.wx-(e.clientX-drag.current.x), y=drag.current.wy-(e.clientY-drag.current.y); setCenter(worldToLonLat(w,y,zoom));}}
           onPointerUp={e=>{if(drag.current && Math.hypot(e.clientX-drag.current.x,e.clientY-drag.current.y)<5) chooseAt(e.clientX,e.clientY); drag.current=null;}}
         >
-          <div className={`tile-stage ${layer === "contrast" ? "contrast" : ""} ${layer === "imagery" ? "imagery" : ""}`} style={{width:map.w,height:map.h,left:"50%",top:"50%",transform:"translate(-50%,-50%)"}}>
+          <div className={`tile-stage ${layer === "contrast" ? "contrast" : ""} ${layer === "imagery" || layer === "terrain" ? layer : ""}`} style={{width:map.w,height:map.h,left:"50%",top:"50%",transform:"translate(-50%,-50%)"}}>
             {map.tiles.map(t=><div className={`tile-cell ${selected.x===t.x&&selected.y===t.y&&selected.z===zoom?"selected":""}`} key={`${t.x}-${t.y}`} style={{left:t.left,top:t.top}}>
               <img src={tileUrl(base, t.x, t.y, zoom)} alt="" draggable={false}/>
               <div className="tile-grid"><span><b>{zoom}</b><i>/</i>{t.x}<i>/</i>{t.y}</span></div>

@@ -108,13 +108,13 @@ export function tileCenterText(x, y, z) {
 }
 
 /**
- * 底图种类键：standard = OSM 矢量，imagery = Esri 世界影像。
- * @typedef {"standard" | "imagery"} BasemapKey
+ * 底图种类键：standard = OSM 矢量，imagery = Esri 世界影像，terrain = Esri 世界地形图。
+ * @typedef {"standard" | "imagery" | "terrain"} BasemapKey
  */
 
 /**
- * 底图切片 URL。注意两家服务的路径顺序不同：
- * OSM 是 /z/x/y.png，ArcGIS World Imagery 是 /z/y/x（无扩展名）。
+ * 底图切片 URL。注意两类服务的路径顺序不同：
+ * OSM 是 /z/x/y.png，ArcGIS（影像/地形）是 /z/y/x（无扩展名）。
  * @param {BasemapKey} basemap
  * @param {number} x
  * @param {number} y
@@ -125,6 +125,10 @@ export function tileUrl(basemap, x, y, z) {
   if (basemap === "imagery") {
     return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
   }
+  if (basemap === "terrain") {
+    // 世界地形图（等高线 + 地貌渲染），与影像同源，全球覆盖到 Z19
+    return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${z}/${y}/${x}`;
+  }
   return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 }
 
@@ -132,6 +136,7 @@ export function tileUrl(basemap, x, y, z) {
 export const ATTRIBUTIONS = {
   standard: "© OpenStreetMap contributors",
   imagery: "Esri, Maxar, Earthstar Geographics",
+  terrain: "Esri, HERE, Garmin, FAO, NOAA, USGS",
 };
 
 /**
